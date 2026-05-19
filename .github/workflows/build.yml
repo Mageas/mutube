@@ -1,0 +1,57 @@
+name: Build MuTube
+
+on:
+  workflow_dispatch:
+    inputs:
+      youtube_ipa_url:
+        description: "URL of the decrypted YouTube IPA (pre-signed if private)"
+        required: true
+        type: string
+      youtube_version:
+        description: "YouTube version (e.g. 4.54.01)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark the release as pre-release"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    permissions:
+      contents: write  # required to create the release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Fetch decrypted YouTube IPA
+        env:
+          IPA_URL: ${{ inputs.youtube_ipa_url }}
+          YT_VERSION: ${{ inputs.youtube_version }}
+        run: |
+          mkdir -p ipa
+          curl -fSL -o "ipa/YouTube_${YT_VERSION}_decrypted.ipa" "$IPA_URL"
+
+      - name: Build mutube.ipa
+        env:
+          YT_VERSION: ${{ inputs.youtube_version }}
+        run: make YOUTUBE_IPA="./ipa/YouTube_${YT_VERSION}_decrypted.ipa"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutube-${{ inputs.youtube_version }}
+          path: mutube.ipa
+          retention-days: 30
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: yt-${{ inputs.youtube_version }}-build${{ github.run_number }}
+          name: MuTube • YouTube ${{ inputs.youtube_version }}
+          files: mutube.ipa
+          prerelease: ${{ inputs.prerelease }}
